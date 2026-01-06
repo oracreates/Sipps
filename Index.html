@@ -1,192 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Solana Ko-fi Clone</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.73.0/lib/index.iife.min.js"></script>
-
-<style>
-  body {
-    font-family: sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    background: #fef3c7;
-  }
-  .container {
-    text-align: center;
-    padding: 2rem;
-    background: #fff8e1;
-    border-radius: 16px;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-    max-width: 400px;
-    width: 100%;
-  }
-  .profile-img {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    margin-bottom: 1rem;
-    object-fit: cover;
-    background: #fde68a;
-  }
-  button {
-    background: #ff6b6b;
-    color: white;
-    padding: .75rem 1.5rem;
-    font-size: 1rem;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    margin: 0.5rem;
-  }
-  button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Ko-Fi</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Solana Web3.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.88.1/lib/index.iife.js"></script>
 </head>
-
 <body>
-<div class="container">
-  <img id="profile-img" class="profile-img" alt="Profile" />
-  <h1 id="creator-name">Loading…</h1>
-  <p id="creator-bio"></p>
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading" class="loading">Loading creator profile...</div>
 
-  <p id="coffeePrice"></p>
-  <p id="platformFee"></p>
+        <!-- Main Card -->
+        <div id="card" class="card" style="display: none;">
+            <!-- Creator Avatar -->
+            <div class="avatar" id="avatar"></div>
 
-  <button id="connectWalletBtn">Connect Wallet</button>
-  <button id="buyCoffeeBtn" disabled>Buy Coffee</button>
+            <!-- Creator Info -->
+            <h1 id="displayName" class="creator-name">Loading...</h1>
+            <p id="bio" class="creator-bio">Loading bio...</p>
 
-  <p id="thankYouMsg" style="display:none;">☕ Thank you for your support!</p>
-</div>
+            <!-- Wallet Connection Section -->
+            <div class="wallet-section">
+                <button id="connectBtn" class="btn btn-primary">Connect Wallet</button>
+                <p id="walletStatus" class="wallet-status"></p>
+            </div>
 
-<script>
-const {
-  Connection,
-  PublicKey,
-  clusterApiUrl,
-  Transaction,
-  SystemProgram,
-  LAMPORTS_PER_SOL
-} = solanaWeb3;
+            <!-- Coffee Purchase Section -->
+            <div class="coffee-section">
+                <p id="coffeePrice" class="coffee-price">Loading price...</p>
+                <button id="buyBtn" class="btn btn-accent" disabled>Buy Coffee</button>
+                <p id="platformFee" class="platform-fee"></p>
+            </div>
 
-/*
-  DEVNET for now.
-  Switch to "mainnet-beta" when going live.
-*/
-const connection = new Connection(clusterApiUrl("devnet"));
+            <!-- Transaction Status -->
+            <div id="statusMessage" class="status-message"></div>
+        </div>
 
-const PLATFORM_WALLET = "FILL_WITH_YOUR_PLATFORM_WALLET_PUBLIC_KEY";
-const PLATFORM_FEE_USD = 0.10;
+        <!-- Error Message -->
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+    </div>
 
-let walletPublicKey = null;
-
-// Mock creators
-const creators = [
-  {
-    handle: "janedoe",
-    name: "Jane Doe",
-    wallet: "5G9hKABCDE1234567890ABCDE1234567890ABCDE12345",
-    bio: "Digital artist & storyteller",
-    coffeePriceSOL: 0.01
-  },
-  {
-    handle: "alexmusic",
-    name: "Alex Music",
-    wallet: "7X1ABCDXYZ1234567890ABCDXYZ1234567890ABCDXYZ12",
-    bio: "Indie musician",
-    coffeePriceSOL: 0.01
-  }
-];
-
-// DOM
-const creatorNameEl = document.getElementById("creator-name");
-const creatorBioEl = document.getElementById("creator-bio");
-const coffeePriceEl = document.getElementById("coffeePrice");
-const platformFeeEl = document.getElementById("platformFee");
-const buyCoffeeBtn = document.getElementById("buyCoffeeBtn");
-const connectWalletBtn = document.getElementById("connectWalletBtn");
-const thankYouMsg = document.getElementById("thankYouMsg");
-const profileImg = document.getElementById("profile-img");
-
-// URL-safe handle detection (Cloudflare friendly)
-function getHandleFromURL() {
-  const path = window.location.pathname.replace("/", "");
-  return path || "janedoe"; // default profile
-}
-
-async function getSolPriceUSD() {
-  try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
-    );
-    const data = await res.json();
-    return data.solana.usd;
-  } catch {
-    return 15;
-  }
-}
-
-async function loadCreatorProfile() {
-  const handle = getHandleFromURL().toLowerCase();
-  const creator = creators.find(c => c.handle === handle);
-
-  if (!creator) {
-    creatorNameEl.textContent = "Creator not found";
-    buyCoffeeBtn.disabled = true;
-    return;
-  }
-
-  creatorNameEl.textContent = creator.name;
-  creatorBioEl.textContent = creator.bio;
-  coffeePriceEl.textContent = `Coffee price: ${creator.coffeePriceSOL} SOL`;
-
-  profileImg.src = "https://api.dicebear.com/7.x/initials/svg?seed=" + creator.name;
-
-  const solPrice = await getSolPriceUSD();
-  const platformFeeSOL = (PLATFORM_FEE_USD / solPrice).toFixed(6);
-
-  platformFeeEl.textContent =
-    `Platform fee: ${platformFeeSOL} SOL (~$${PLATFORM_FEE_USD})`;
-
-  buyCoffeeBtn.dataset.creatorWallet = creator.wallet;
-  buyCoffeeBtn.dataset.coffeePriceSOL = creator.coffeePriceSOL;
-  buyCoffeeBtn.dataset.platformFeeSOL = platformFeeSOL;
-}
-
-// Wallet connect
-connectWalletBtn.onclick = async () => {
-  if (!window.solana) return alert("Phantom not found");
-  const res = await window.solana.connect();
-  walletPublicKey = res.publicKey;
-  buyCoffeeBtn.disabled = false;
-};
-
-// Buy coffee
-buyCoffeeBtn.onclick = async () => {
-  const tx = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: walletPublicKey,
-      toPubkey: new PublicKey(buyCoffeeBtn.dataset.creatorWallet),
-      lamports: buyCoffeeBtn.dataset.coffeePriceSOL * LAMPORTS_PER_SOL
-    }),
-    SystemProgram.transfer({
-      fromPubkey: walletPublicKey,
-      toPubkey: new PublicKey(PLATFORM_WALLET),
-      lamports: buyCoffeeBtn.dataset.platformFeeSOL * LAMPORTS_PER_SOL
-    })
-  );
-
-  await window.solana.signAndSendTransaction(tx);
-  thankYouMsg.style.display = "block";
-};
-
-window.onload = loadCreatorProfile;
-</script>
+    <script src="script.js"></script>
 </body>
 </html>
